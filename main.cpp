@@ -9,12 +9,12 @@ int chrono_newPatient = 1;
 
 int chairs = 5;
 int customers = 0;
+bool barberAsleep = false;
 mutex mut;
 mutex customer;
 mutex barber;
 mutex customerDone;
 mutex barberDone;
-mutex barberWakeUp;
 
 
 void balk(int id){
@@ -36,14 +36,9 @@ void getHairCut(int id)
     customers++;                // Rentre dans le magasin
     mut.unlock();               // Dévérouille le compteur de clients
 
-    if (customers == 1 && barberWakeUp.try_lock() == false) {
+    if (customers == 1 && barberAsleep) {
         cout << "Patient " << id << ": réveille le médecin" << endl;
-        barberWakeUp.unlock();
-        if(barberWakeUp.try_lock()) {
-            cout << "Le médecin est réveillé" << endl;
-        } else {
-            cout << "Le médecin dort encore" << endl;
-        }
+        barberAsleep = false;
     }
 
     // Attente et consultation
@@ -67,13 +62,16 @@ void cutHair()
 {
     cout << "Médecin : Attend un patient" << endl;
 
-    if(customer.try_lock() == false) { // Si il n'y a personne dans la file d'attente
+    if (customer.try_lock() == false) {
         cout << "Médecin : S'endort car il n'y a pas de patient" << endl;
-        barberWakeUp.lock();    // Le barbier s'endort
-        barberWakeUp.lock();    // Attend qu'on le réveille (il prend la ressource et attend que quelqu'un d'autre la libère)
-        barberWakeUp.unlock();  // Il se réveille
+        barberAsleep = true;        // Indique que le barbier est endormi
+        while (barberAsleep) {      // Attendre jusqu'à ce qu'il soit réveillé
+            //this_thread::yield();   // Laisse d'autres threads fonctionner
+            sleep(1);
+        }
         cout << "Médecin : Se fait réveiller" << endl;
     }
+
     barber.unlock();            // Déclare qu'il est disponible
     customer.lock();            // Attend un client
     // Coupe les cheveux        // Coupe les cheveux du client
@@ -83,7 +81,7 @@ void cutHair()
 
 void routine()
 {
-    barberWakeUp.unlock();
+    barberAsleep = true;
     while (true)
     {
         cutHair();
