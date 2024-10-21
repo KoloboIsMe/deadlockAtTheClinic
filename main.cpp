@@ -1,101 +1,68 @@
 #include <iostream>
 #include <mutex>
 #include <thread>
-#include <semaphore>
 #include <vector>
-
+#include <chrono>
 using namespace std;
 
-// VARIABLES GLOBALES
+int chrono_newPatient = 2;
 
-int patients = 0; // Nombre de clients dans la clinique
-bool medicIsSleeping; // True si le docteur dort
-vector<thread> patientsThreads;
-
-// PARAMETRES
-
-int n = 3; // Nombre de chaises
-int tmp_takeCareOfPatient = 1; // Temps que prend le médecin pour s'occuper d'un patient
-int tmp_newPatient = 2; // Intervalle de temps entre chaque nouveau patient
-
-// RESSOURCES CRITIQUES
+int chairs = 1;
+int customers = 0;
 mutex mut;
+mutex customer;
+mutex barber;
+mutex customerDone;
+mutex barberDone;
 
-void takeCareOfPatient()
+void getHairCut(int id)
 {
-    cout << "Le médecin s'occupe d'un patient\n";
-    sleep(tmp_takeCareOfPatient);
-}
-
-void medicNap()
-{
-    medicIsSleeping = true;
-
-    cout << "Le médecin fait la sieste\n";
-    while(medicIsSleeping)
-    {
-        sleep(1);
-    }
-    cout << "Le médecin se réveille\n";
-
-    return;
-}
-
-void medicRoutine()
-{
-    while(true)
-    {
-        mut.lock();
-        if(patients == 0) // Si il n'y a pas de patient
-        {
-            medicNap();
-        }
-        else
-        {
-            takeCareOfPatient();
-            patients -= 1;
-        }
-        mut.unlock();
-    }
-}
-
-void wakeUpMedic()
-{
-    cout << "Le patient " << this_thread::get_id() << " réveille le médecin\n";
-    medicIsSleeping = false;
-}
-
-void patientRoutine()
-{
-    mut.lock();
-    // Le patient arrive dans la clinique
-    if(patients == n)
-    {
-        cout << "La clinique ne peut pas accueillir le patient " << this_thread::get_id() << endl;
-        return;
+    mut.lock();                 // Vérouille le compteur de clients
+    if(customers == chairs)     // Si la salle est pleine
+    {                           //
+        mut.unlock();           // Libère le compteur de clients et s'en va.
+    }                           //
+    else                        // Sinon
+    {                           //
+        customers++;            // Rentre dans le magasin
+        customer.lock();        // Vérouille la ressource critique client ?
+        barber.lock();          // Vérouille la ressource critique barbier ?
+        // Get the haircut      // Se fait couper les cheveux
+        customerDone.lock();    // Vérouille la ressource critique customerDone ?
+        barberDone.lock();      // Vérouille la ressource critique barberDone ?
+        mut.lock();             // Vérouille le compteur de clients
+        customers--;            // Sort du magasin
+        mut.unlock();           // Libère le compteur de clients
     }
 
-    if(patients == 0 && medicIsSleeping)
-    {
-        wakeUpMedic();
-    }
+}
 
-    // Le patient attend son tour
-    cout << "Le patient " << this_thread::get_id() << " va dans la file d'attente\n";
-    patients += 1;
-    cout << patients << " patients dans la file d'attente\n";
-    mut.unlock();
+void cutHair()
+{
+    customer.lock();            // Vérouille la ressource critique client ?
+    barber.lock();              // Vérouille la ressource critique barbier ?
+    // Coupe les cheveux        // Coupe les cheveux du client
+    customerDone.lock();        // Vérouille la ressource critique customerDone
+    barberDone.lock();          // Vérouille la ressource critique barberDone ?
+}
+
+void routine()
+{
+    while (true)
+    {
+        cutHair();
+    }
 }
 
 int main()
 {
-    thread medic (medicRoutine);
+    thread barber(routine);
+    vector<thread> patientsThreads;
+    int clientId = 1;
 
-    while(true)
-    {
-        // Faire rentrer des patients régulièrement
-        patientsThreads.push_back(thread(patientRoutine));
-        sleep(tmp_newPatient);
+    while (true) {
+        patientsThreads.push_back(thread(getHairCut, clientId++));
+        sleep(chrono_newPatient);
     }
 
     return 0;
