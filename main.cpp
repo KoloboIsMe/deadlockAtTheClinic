@@ -36,11 +36,18 @@ void getHairCut(int id)
     customers++;                // Rentre dans le magasin
     mut.unlock();               // Dévérouille le compteur de clients
 
+    if (customers == 1 && barberWakeUp.try_lock() == false) {
+        cout << "Patient " << id << ": réveille le médecin" << endl;
+        barberWakeUp.unlock();
+        if(barberWakeUp.try_lock()) {
+            cout << "Le médecin est réveillé" << endl;
+        } else {
+            cout << "Le médecin dort encore" << endl;
+        }
+    }
+
     // Attente et consultation
     cout << "Patient " << id << ": attend pour sa consultation" << endl;
-    if (customers == 1 && barberWakeUp.try_lock() == false) {
-        barberWakeUp.unlock();
-    }
 
     customer.unlock();          // Déclare qu'il est disponible
     barber.lock();              // Attend que le médecin soit disponible
@@ -63,7 +70,8 @@ void cutHair()
     if(customer.try_lock() == false) { // Si il n'y a personne dans la file d'attente
         cout << "Médecin : S'endort car il n'y a pas de patient" << endl;
         barberWakeUp.lock();    // Le barbier s'endort
-        barberWakeUp.lock();    // Attend qu'on le réveil
+        barberWakeUp.lock();    // Attend qu'on le réveille (il prend la ressource et attend que quelqu'un d'autre la libère)
+        barberWakeUp.unlock();  // Il se réveille
         cout << "Médecin : Se fait réveiller" << endl;
     }
     barber.unlock();            // Déclare qu'il est disponible
@@ -75,6 +83,7 @@ void cutHair()
 
 void routine()
 {
+    barberWakeUp.unlock();
     while (true)
     {
         cutHair();
